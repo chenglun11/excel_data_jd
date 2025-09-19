@@ -30,7 +30,7 @@ export function LoginForm() {
       } else {
         setError("用户名或密码错误")
       }
-    } catch (err) {
+    } catch {
       setError("登录失败，请重试")
     } finally {
       setIsLoading(false)

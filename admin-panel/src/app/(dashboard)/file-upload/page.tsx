@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,11 +16,11 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table"
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert"
+// import {
+//   Alert,
+//   AlertDescription,
+//   AlertTitle,
+// } from "@/components/ui/alert"
 import {
   Upload,
   FileSpreadsheet,
@@ -43,12 +43,12 @@ interface UploadedFiles {
 interface FileAnalysis {
   product_file?: {
     columns: string[]
-    sample_data: any[]
+    sample_data: Record<string, unknown>[]
     total_columns: number
   }
   order_file?: {
     columns: string[]
-    sample_data: any[]
+    sample_data: Record<string, unknown>[]
     total_columns: number
   }
   error?: string
@@ -58,14 +58,14 @@ interface ProcessingResult {
   success: boolean
   message: string
   data: {
-    records: any[]
+    records: Record<string, unknown>[]
     total_records: number
     columns: string[]
   }
   analysis: {
-    summary: any
-    shop_analysis: any
-    processing_info: any
+    summary: Record<string, unknown>
+    shop_analysis: Record<string, unknown>
+    processing_info: Record<string, unknown>
   }
 }
 
@@ -80,7 +80,7 @@ export default function FileUploadPage() {
   const [uploading, setUploading] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFiles | null>(null)
-  const [fileAnalysis, setFileAnalysis] = useState<FileAnalysis | null>(null)
+  const [, setFileAnalysis] = useState<FileAnalysis | null>(null)
   const [shops, setShops] = useState<Shop[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [result, setResult] = useState<ProcessingResult | null>(null)
@@ -108,9 +108,10 @@ export default function FileUploadPage() {
       formData.append('product_file', productFile)
       formData.append('order_file', orderFile)
 
-      const response = await fetch('http://localhost:8000/upload/files', {
+      const response = await fetch('http://apis.lchnan.cn/upload/files', {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'include'
       })
 
       const data = await response.json()
@@ -222,7 +223,7 @@ export default function FileUploadPage() {
       const data = await response.json()
       if (data.success) {
         // 触发下载
-        const downloadUrl = `http://localhost:8000${data.download_url}`
+        const downloadUrl = `http://apis.lchnan.cn${data.download_url}`
         window.open(downloadUrl, '_blank')
         alert(`数据导出成功！文件名: ${data.filename}`)
       }
@@ -234,8 +235,9 @@ export default function FileUploadPage() {
 
   const clearFiles = async () => {
     try {
-      const response = await fetch('http://localhost:8000/files/clear', {
-        method: 'DELETE'
+      const response = await fetch('http://apis.lchnan.cn/files/clear', {
+        method: 'DELETE',
+        credentials: 'include'
       })
 
       if (response.ok) {
@@ -451,7 +453,7 @@ export default function FileUploadPage() {
               {!result ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>请选择店铺并点击"开始处理"</p>
+                  <p>请选择店铺并点击&quot;开始处理&quot;</p>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -473,13 +475,13 @@ export default function FileUploadPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="text-center p-6 border rounded-lg">
                           <div className="text-3xl font-bold text-blue-600">
-                            {result.analysis.summary.total_records || 0}
+                            {(result.analysis.summary.total_records as number) || 0}
                           </div>
                           <div className="text-sm text-muted-foreground">订单数</div>
                         </div>
                         <div className="text-center p-6 border rounded-lg bg-orange-50">
                           <div className="text-3xl font-bold text-orange-600">
-                            ¥{(result.analysis.summary.total_cost || 0).toLocaleString()}
+                            ¥{((result.analysis.summary.total_cost as number) || 0).toLocaleString()}
                           </div>
                           <div className="text-sm text-muted-foreground font-medium">总成本</div>
                         </div>

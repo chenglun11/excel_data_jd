@@ -1,22 +1,52 @@
 """
-文件上传数据处理器
-支持上传Excel文件并进行数据处理
+京东店铺数据处理器
+支持Excel文件上传和数据处理，包含重复数据检测和去重功能
 """
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime
 import os
 import json
+from datetime import datetime
+from typing import Dict, List, Any, Optional, Tuple
+
+import pandas as pd
+import numpy as np
 
 class UploadProcessor:
+    """
+    京东店铺数据处理器
+
+    主要功能：
+    - 加载产品信息表和订单数据
+    - 数据清理和去重
+    - 产品信息与订单数据匹配
+    - 成本利润计算
+    - 数据分析和统计
+    - 处理结果导出
+
+    Attributes:
+        product_df: 产品信息DataFrame
+        order_df: 订单数据DataFrame
+        processed_data: 处理后的数据DataFrame
+        dedup_stats: 去重统计信息
+    """
+
     def __init__(self):
+        """初始化处理器"""
         self.product_df = None
         self.order_df = None
         self.processed_data = None
+        self.dedup_stats = {}
 
-    def load_from_files(self, product_file_path: str, order_file_path: str):
-        """从上传的文件加载数据"""
+    def load_from_files(self, product_file_path: str, order_file_path: str) -> bool:
+        """
+        从Excel文件加载产品和订单数据
+
+        Args:
+            product_file_path: 产品信息表文件路径
+            order_file_path: 订单数据文件路径
+
+        Returns:
+            bool: 加载成功返回True，失败返回False
+        """
         try:
             # 加载产品信息表
             self.product_df = pd.read_excel(product_file_path)
@@ -65,89 +95,30 @@ class UploadProcessor:
 
         return analysis
 
-    # def clean_order_data(self, filter_options: Dict[str, Any] = None) -> pd.DataFrame:
-    #     """清理订单数据"""
-    #     if self.order_df is None:
-    #         return pd.DataFrame()
-
-    #     df = self.order_df.copy()
-
-    #     # 过滤条件
-    #     filters = []
-
-    #     # 1. 查找并过滤订单标记为空单的记录
-    #     order_mark_columns = []
-    #     for col in df.columns:
-    #         if any(keyword in str(col).lower() for keyword in ['订单标记', '标记', 'mark']):
-    #             order_mark_columns.append(col)
-
-    #     if order_mark_columns:
-    #         order_mark_col = order_mark_columns[0]
-    #         # 过滤掉标记为空单的订单（注意：空值(NaN)是正常的，我们要过滤的是明确标记为"空单"的）
-    #         filters.append(df[order_mark_col] != '空单')
-    #         filters.append(~df[order_mark_col].str.contains('空单', na=False))
-    #         print(f"发现订单标记列: {order_mark_col}")
-    #     else:
-    #         print("警告：未找到订单标记列")
-
-    #     # 2. 查找买家实付列（可能有不同的名称）
-    #     amount_columns = []
-    #     for col in df.columns:
-    #         if any(keyword in str(col).lower() for keyword in ['买家实付', '实付', '金额', '付款']):
-    #             amount_columns.append(col)
-
-    #     # 使用第一个找到的金额列，确保有实际付款
-    #     if amount_columns:
-    #         amount_col = amount_columns[0]
-    #         # 过滤掉金额为空或者为0的订单
-    #         filters.append(df[amount_col].notna())
-    #         filters.append(df[amount_col] > 0)
-    #         print(f"发现买家实付列: {amount_col}")
-    #     else:
-    #         print("警告：未找到买家实付列")
-
-    #     # 3. 查找订单状态列
-    #     status_columns = []
-    #     for col in df.columns:
-    #         if any(keyword in str(col).lower() for keyword in ['状态', 'status']):
-    #             status_columns.append(col)
-
-    #     # 过滤已关闭的订单、退款订单、线下订单
-    #     for status_col in status_columns:
-    #         filters.append(df[status_col] != '关闭')
-    #         filters.append(~df[status_col].str.contains('退款', na=False))
-    #         filters.append(df[status_col] != '[线下订单]')
-    #         print(f"发现状态列: {status_col}")
-
-    #     # 应用过滤条件
-    #     if filters:
-    #         final_filter = np.logical_and.reduce(filters)
-    #         cleaned_df = df[final_filter].copy()
-    #     else:
-    #         cleaned_df = df.copy()
-
-    #     # 店铺筛选
-    #     if filter_options and 'selected_shops' in filter_options:
-    #         selected_shops = filter_options['selected_shops']
-    #         if selected_shops:
-    #             shop_columns = []
-    #             for col in df.columns:
-    #                 if any(keyword in str(col).lower() for keyword in ['店铺', 'shop']):
-    #                     shop_columns.append(col)
-
-    #             if shop_columns:
-    #                 shop_col = shop_columns[0]
-    #                 cleaned_df = cleaned_df[cleaned_df[shop_col].isin(selected_shops)]
-
-    #     print(f"原始订单: {len(df)}, 清理后: {len(cleaned_df)} (已排除空单、退款、关闭等无效订单)")
-    #     return cleaned_df
-
     def clean_order_data(self, filter_options: Dict[str, Any] = None) -> pd.DataFrame:
-        """清理订单数据（按订单级过滤金额与状态；保留订单内所有行，包括0元赠品/返现行）"""
+        """
+        清理订单数据，包含去重和过滤功能
+
+        按订单级过滤金额与状态，保留订单内所有行（包括0元赠品/返现行）
+
+        Args:
+            filter_options: 过滤选项，包含店铺筛选等参数
+
+        Returns:
+            pd.DataFrame: 清理后的订单数据
+        """
         if self.order_df is None:
             return pd.DataFrame()
 
         df = self.order_df.copy()
+
+        # ✅ 关键修复3：订单数据预处理去重，移除完全重复的订单行
+        original_order_rows = len(df)
+        df = df.drop_duplicates().reset_index(drop=True)
+        dedup_order_rows = len(df)
+        if original_order_rows != dedup_order_rows:
+            print(f"⚠️ 订单原始数据去重: {original_order_rows} -> {dedup_order_rows} 行 (去除了 {original_order_rows - dedup_order_rows} 个重复行)")
+
         filters = []
 
         # 订单标记列
@@ -219,13 +190,22 @@ class UploadProcessor:
 
 
     def match_products_with_orders(self, order_df: pd.DataFrame) -> pd.DataFrame:
-        """匹配产品信息和订单信息"""
+        """
+        匹配产品信息和订单信息，自动处理重复数据
+
+        根据商品编码将产品信息表与订单数据进行匹配，
+        包含自动去重逻辑防止重复数据产生
+
+        Args:
+            order_df: 清理后的订单数据
+
+        Returns:
+            pd.DataFrame: 匹配后的数据
+        """
         if self.product_df is None or order_df.empty:
             return pd.DataFrame()
 
-        # 打印所有列名用于调试
-        print(f"产品信息表列名: {list(self.product_df.columns)}")
-        print(f"订单信息表列名: {list(order_df.columns)}")
+        # 获取列名信息用于匹配
 
         # 查找商品编码列
         product_sku_cols = []
@@ -240,8 +220,7 @@ class UploadProcessor:
             if any(keyword in col_str for keyword in ['商品编码', 'sku', '编号', '商家编码', '货号', 'code']):
                 order_sku_cols.append(col)
 
-        print(f"找到的产品编码列: {product_sku_cols}")
-        print(f"找到的订单编码列: {order_sku_cols}")
+        # 检查是否找到可匹配的编码列
 
         if not product_sku_cols or not order_sku_cols:
             print("警告：未找到匹配的商品编码列")
@@ -265,9 +244,14 @@ class UploadProcessor:
                 product_df[product_col] = product_df[product_col].astype(str).str.strip()
                 temp_order_df[order_col] = temp_order_df[order_col].astype(str).str.strip()
 
-                # 打印样本数据用于调试
-                print(f"产品编码样本: {product_df[product_col].head(5).tolist()}")
-                print(f"订单编码样本: {temp_order_df[order_col].head(5).tolist()}")
+                # ✅ 关键修复1：产品表去重，避免同一商品编码对应多个产品记录导致重复
+                product_before_dedup = len(product_df)
+                product_df = product_df.drop_duplicates(subset=[product_col], keep='first')
+                product_after_dedup = len(product_df)
+                if product_before_dedup != product_after_dedup:
+                    print(f"⚠️ 产品表去重: {product_before_dedup} -> {product_after_dedup} 行 (去除了 {product_before_dedup - product_after_dedup} 个重复商品编码)")
+
+                # 进行数据匹配
 
                 # 匹配逻辑
                 matched_df = temp_order_df.merge(
@@ -279,15 +263,23 @@ class UploadProcessor:
                 )
 
                 matched_count = len(matched_df[matched_df[product_col].notna()])
-                print(f"匹配成功: {matched_count} / {len(temp_order_df)} 条订单")
+                # 记录匹配结果
 
                 if matched_count > best_match_count:
                     best_match_count = matched_count
                     best_matched_df = matched_df
-                    print(f"更新最佳匹配: {matched_count} 条")
+                    # 更新最佳匹配结果
 
         if best_matched_df is not None and best_match_count > 0:
-            print(f"\n最终使用最佳匹配结果: {best_match_count} / {len(order_df)} 条订单")
+            # 使用最佳匹配结果
+
+            # ✅ 关键修复2：最终结果去重，确保没有完全重复的行
+            original_rows = len(best_matched_df)
+            best_matched_df = best_matched_df.drop_duplicates().reset_index(drop=True)
+            final_rows = len(best_matched_df)
+            if original_rows != final_rows:
+                print(f"⚠️ 最终结果去重: {original_rows} -> {final_rows} 行 (去除了 {original_rows - final_rows} 个重复行)")
+
             return best_matched_df
         else:
             print("\n警告：所有匹配尝试都失败！")
@@ -296,53 +288,19 @@ class UploadProcessor:
             order_df['匹配状态'] = '匹配失败'
             return order_df
 
-    # def calculate_costs_and_profits(self, matched_df: pd.DataFrame) -> pd.DataFrame:
-    #     """处理成本显示（只使用产品信息表中的成本）"""
-    #     if matched_df.empty:
-    #         return pd.DataFrame()
-
-    #     df = matched_df.copy()
-
-    #     # 只查找产品信息表的成本列
-    #     cost_cols = []
-    #     for col in df.columns:
-    #         col_str = str(col).lower()
-    #         if any(keyword in col_str for keyword in ['成本', 'cost']) and not any(exclude in col_str for exclude in ['买家', '实付', '金额']):
-    #             cost_cols.append(col)
-
-    #     if cost_cols:
-    #         cost_col = cost_cols[0]
-    #         df[cost_col] = pd.to_numeric(df[cost_col], errors='coerce')
-    #         matched_rows = df[cost_col].notna().sum()
-
-    #         if matched_rows > 0:
-    #             # 只使用匹配成功且有成本数据的订单
-    #             df['实际成本'] = df[cost_col]
-    #             print(f"使用产品信息表成本: {cost_col}")
-    #             print(f"匹配到成本的订单: {matched_rows} / {len(df)}")
-    #             print(f"成本样本: {df[df[cost_col].notna()][cost_col].head(5).tolist()}")
-
-    #             # 对于没有匹配到成本的订单，设置成本为0（不能用买家实付）
-    #             no_cost_rows = len(df) - matched_rows
-    #             if no_cost_rows > 0:
-    #                 print(f"警告: {no_cost_rows} 条订单未匹配到产品成本，这些订单的成本将为0")
-    #         else:
-    #             print("错误: 产品信息表成本列无有效数据")
-    #             df['实际成本'] = 0
-    #     else:
-    #         print("错误: 未找到产品信息表成本列")
-    #         df['实际成本'] = 0
-
-    #     # 清理NaN值和无效值
-    #     df = df.fillna(0)
-    #     df = df.replace([np.inf, -np.inf], 0)
-
-    #     # 添加处理标记
-    #     df['数据处理时间'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-    #     return df
     def calculate_costs_and_profits(self, matched_df: pd.DataFrame) -> pd.DataFrame:
-        """总成本只来自【产品表】；优先产品侧(_product)列；数量正确时成本也会正确。"""
+        """
+        计算成本和利润
+
+        从产品表获取成本信息，计算总成本、利润和毛利率
+        优先使用产品侧(_product)列，确保成本数据的准确性
+
+        Args:
+            matched_df: 匹配后的数据
+
+        Returns:
+            pd.DataFrame: 包含成本利润信息的完整数据
+        """
         if matched_df.empty:
             return pd.DataFrame()
 
@@ -363,10 +321,8 @@ class UploadProcessor:
         if product_cost_cols:
             unit_cost_col = product_cost_cols[0]
             df['单位成本'] = pd.to_numeric(df[unit_cost_col], errors='coerce').fillna(0)
-            print(f"使用产品侧成本列: {unit_cost_col}")
         else:
             df['单位成本'] = 0.0
-            print("⚠️ 未在产品侧找到成本列（如 成本/进货/采购/cost），单位成本=0")
 
         # —— 数量（优先这些名字）
         qty_candidates = [c for c in df.columns if any(k in str(c).lower() for k in
@@ -374,10 +330,8 @@ class UploadProcessor:
         if qty_candidates:
             qty_col = qty_candidates[0]
             df['数量'] = pd.to_numeric(df[qty_col], errors='coerce').fillna(1)
-            print(f"使用数量列: {qty_col}")
         else:
             df['数量'] = 1
-            print("ℹ️ 未找到数量列，默认数量=1")
 
         # —— 可选收入（不影响“成本正确”）
         amount_cols = [c for c in df.columns if any(k in str(c).lower() for k in
@@ -393,15 +347,7 @@ class UploadProcessor:
         df['利润'] = (df['销售收入'] - df['总成本']).round(2)
         df['毛利率'] = np.where(df['销售收入'] > 0, (df['利润'] / df['销售收入']).round(4), 0)
 
-        # —— 诊断：哪些行的成本=0（很可能是没匹配到产品或产品成本空）
-        zero_cost_rows = df[df['单位成本'] == 0]
-        if not zero_cost_rows.empty:
-            sample = zero_cost_rows.head(5)
-            # 尝试找出被用于匹配的订单/产品编码列（打印看看）
-            order_code_cols = [c for c in df.columns if any(k in str(c).lower() for k in ['商品编码','商家编码','sku','货号','【线上】商品编码'])]
-            cols_to_show = ['订单号'] + order_code_cols + ['商品名称','规格名称'] if '订单号' in df.columns else order_code_cols + ['商品名称','规格名称']
-            print("⚠️ 单位成本=0 的样例（前5行）:")
-            print(sample[ [c for c in cols_to_show if c in sample.columns] ].to_string(index=False))
+        # 清理和验证数据
 
         df['数据处理时间'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         df.replace([np.inf, -np.inf], 0, inplace=True)
@@ -426,6 +372,50 @@ class UploadProcessor:
             return sorted(self.order_df[shop_columns[0]].unique().tolist())
         return []
 
+    def detect_duplicates(self, df: pd.DataFrame, description: str = "") -> Dict[str, Any]:
+        """检测数据框中的重复情况并返回详细报告"""
+        if df.empty:
+            return {"total_rows": 0, "duplicate_rows": 0, "duplicate_rate": 0}
+
+        total_rows = len(df)
+        unique_rows = len(df.drop_duplicates())
+        duplicate_rows = total_rows - unique_rows
+        duplicate_rate = round(duplicate_rows / total_rows * 100, 2) if total_rows > 0 else 0
+
+        report = {
+            "description": description,
+            "total_rows": total_rows,
+            "unique_rows": unique_rows,
+            "duplicate_rows": duplicate_rows,
+            "duplicate_rate": duplicate_rate
+        }
+
+        # 如果有重复，尝试找出重复最多的字段组合
+        if duplicate_rows > 0:
+            # 检查关键字段的重复情况
+            key_fields = []
+            for col in df.columns:
+                col_str = str(col).lower()
+                if any(k in col_str for k in ['订单号', '商品编码', '商家编码', 'sku']):
+                    key_fields.append(col)
+
+            if key_fields:
+                field_duplicates = {}
+                for field in key_fields:
+                    if field in df.columns:
+                        total_vals = len(df[field])
+                        unique_vals = len(df[field].dropna().unique())
+                        dup_vals = total_vals - unique_vals
+                        field_duplicates[field] = {
+                            "total": total_vals,
+                            "unique": unique_vals,
+                            "duplicates": dup_vals,
+                            "duplicate_rate": round(dup_vals / total_vals * 100, 2) if total_vals > 0 else 0
+                        }
+                report["field_duplicates"] = field_duplicates
+
+        return report
+
     def safe_json_convert(self, obj):
         """安全的JSON转换，处理NaN和特殊值"""
         if isinstance(obj, (np.integer, np.floating)):
@@ -439,95 +429,6 @@ class UploadProcessor:
         elif pd.isna(obj):
             return None
         return obj
-
-    # def analyze_by_shop(self, processed_df: pd.DataFrame) -> Dict[str, Any]:
-    #     """按店铺分析数据"""
-    #     if processed_df.empty:
-    #         return {}
-
-    #     shop_columns = []
-    #     for col in processed_df.columns:
-    #         if any(keyword in str(col).lower() for keyword in ['店铺', 'shop']):
-    #             shop_columns.append(col)
-
-    #     if not shop_columns:
-    #         return {}
-
-    #     shop_col = shop_columns[0]
-    #     shop_analysis = {}
-
-    #     for shop in processed_df[shop_col].unique():
-    #         if pd.isna(shop):
-    #             continue
-
-    #         shop_data = processed_df[processed_df[shop_col] == shop]
-
-    #         analysis = {
-    #             'shop_name': str(shop),
-    #             'total_orders': int(len(shop_data)),
-    #             'total_cost': 0
-    #         }
-
-    #         # 直接使用买家实付列作为成本数据源
-    #         cost_cols = []
-    #         amount_cols = []  # 买家实付列实际存储的是成本
-
-    #         for col in shop_data.columns:
-    #             col_str = str(col).lower()
-    #             if any(keyword in col_str for keyword in ['买家实付', '实付']):
-    #                 amount_cols.append(col)
-    #             elif any(keyword in col_str for keyword in ['实际成本']):  # 我们创建的成本列
-    #                 cost_cols.append(col)
-
-    #         # 优先使用我们创建的"实际成本"列，否则直接使用买家实付列
-    #         if cost_cols:
-    #             cost_col = cost_cols[0]
-    #             analysis['total_cost'] = float(shop_data[cost_col].sum()) if not shop_data[cost_col].isna().all() else 0
-    #         elif amount_cols:
-    #             cost_col = amount_cols[0]
-    #             analysis['total_cost'] = float(shop_data[cost_col].sum()) if not shop_data[cost_col].isna().all() else 0
-
-    #         # 确保所有值都是JSON兼容的
-    #         analysis = self.safe_json_convert(analysis)
-    #         shop_analysis[str(shop)] = analysis
-
-    #     return shop_analysis
-
-    # def get_summary_statistics(self, processed_df: pd.DataFrame) -> Dict[str, Any]:
-    #     """获取汇总统计信息"""
-    #     if processed_df.empty:
-    #         return {}
-
-    #     # 查找相关列
-    #     shop_columns = []
-    #     for col in processed_df.columns:
-    #         col_str = str(col).lower()
-    #         if any(keyword in col_str for keyword in ['店铺', 'shop']):
-    #             shop_columns.append(col)
-
-    #     summary = {
-    #         'total_records': int(len(processed_df)),
-    #         'total_shops': int(processed_df[shop_columns[0]].nunique()) if shop_columns else 0,
-    #         'total_cost': 0
-    #     }
-
-    #     # 只使用我们创建的"实际成本"列（来自产品信息表）
-    #     cost_columns = []
-    #     for col in processed_df.columns:
-    #         if col == '实际成本':
-    #             cost_columns.append(col)
-
-    #     if cost_columns:
-    #         cost_col = cost_columns[0]
-    #         summary['total_cost'] = float(processed_df[cost_col].sum()) if not processed_df[cost_col].isna().all() else 0
-    #         print(f"统计总成本: {summary['total_cost']}")
-    #     else:
-    #         print("警告：未找到实际成本列")
-    #         summary['total_cost'] = 0
-
-    #     # 确保所有值都是JSON兼容的
-    #     summary = self.safe_json_convert(summary)
-    #     return summary
 
     def get_summary_statistics(self, processed_df: pd.DataFrame) -> Dict[str, Any]:
         if processed_df.empty:
@@ -576,7 +477,21 @@ class UploadProcessor:
 
 
     def process_data(self, filter_options: Dict[str, Any] = None) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        """
+        执行完整的数据处理流程
+
+        包括数据清理、匹配、成本计算、去重和统计分析
+
+        Args:
+            filter_options: 过滤选项
+
+        Returns:
+            Tuple[pd.DataFrame, Dict[str, Any]]: 处理后的数据和分析结果
+        """
         print("开始数据处理...")
+
+        # 重置去重统计
+        self.dedup_stats = {}
 
         cleaned_orders = self.clean_order_data(filter_options)
         if cleaned_orders.empty:
@@ -584,6 +499,44 @@ class UploadProcessor:
 
         matched_data = self.match_products_with_orders(cleaned_orders)
         processed_data = self.calculate_costs_and_profits(matched_data)
+
+        # ✅ 关键修复4：最终数据智能去重，基于关键业务字段避免重复
+        if not processed_data.empty:
+            before_final_dedup = len(processed_data)
+
+            # 检测处理前的重复情况
+            before_dedup_report = self.detect_duplicates(processed_data, "处理完成后、最终去重前")
+            self.dedup_stats['before_final_dedup'] = before_dedup_report
+
+            # 找到关键字段用于去重（订单号+商品编码+规格等）
+            key_columns = []
+
+            # 订单号
+            order_cols = [c for c in processed_data.columns if any(k in str(c).lower() for k in ['订单号','订单编号','order'])]
+            if order_cols:
+                key_columns.append(order_cols[0])
+
+            # 商品编码
+            sku_cols = [c for c in processed_data.columns if any(k in str(c).lower() for k in ['商品编码','商家编码','sku','货号'])]
+            if sku_cols:
+                key_columns.append(sku_cols[0])
+
+            # 规格名称（如果存在）
+            spec_cols = [c for c in processed_data.columns if any(k in str(c).lower() for k in ['规格','spec','型号'])]
+            if spec_cols:
+                key_columns.append(spec_cols[0])
+
+            # 如果找到了关键字段，基于这些字段去重
+            if key_columns:
+                processed_data = processed_data.drop_duplicates(subset=key_columns, keep='first').reset_index(drop=True)
+                after_final_dedup = len(processed_data)
+                if before_final_dedup != after_final_dedup:
+                    print(f"⚠️ 最终业务去重: {before_final_dedup} -> {after_final_dedup} 行 (基于 {key_columns} 去除了 {before_final_dedup - after_final_dedup} 个重复业务记录)")
+
+                # 检测最终去重后的情况
+                after_dedup_report = self.detect_duplicates(processed_data, "最终去重后")
+                self.dedup_stats['after_final_dedup'] = after_dedup_report
+                self.dedup_stats['final_dedup_key_columns'] = key_columns
 
         # 统计：行数 + 订单数
         order_id_cols = [c for c in processed_data.columns if any(k in str(c).lower() for k in ['订单号','订单编号','order'])]
@@ -596,10 +549,11 @@ class UploadProcessor:
             'processing_info': {
                 'original_lines': len(self.order_df) if self.order_df is not None else 0,
                 'cleaned_lines': len(cleaned_orders),
-                'cleaned_orders': cleaned_order_count,  # ✅ 真正的“单数”
+                'cleaned_orders': cleaned_order_count,  # ✅ 真正的"单数"
                 'matched_lines': len(processed_data),
                 'processed_time': datetime.now().isoformat()
-            }
+            },
+            'deduplication_stats': self.dedup_stats  # ✅ 添加去重统计信息
         }
         self.processed_data = processed_data
         print("数据处理完成!")
@@ -615,37 +569,6 @@ class UploadProcessor:
             with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
                 # 主数据表
                 self.processed_data.to_excel(writer, sheet_name='处理后数据', index=False)
-
-                # 店铺汇总
-                shop_columns = []
-                amount_columns = []
-                for col in self.processed_data.columns:
-                    col_str = str(col).lower()
-                    if any(keyword in col_str for keyword in ['店铺', 'shop']):
-                        shop_columns.append(col)
-                    elif any(keyword in col_str for keyword in ['买家实付', '实付']):
-                        amount_columns.append(col)
-
-                # if shop_columns:
-                #     shop_col = shop_columns[0]
-                #     agg_dict = {}
-
-                #     if amount_columns:
-                #         agg_dict[amount_columns[0]] = 'sum'
-
-                #     if '总成本' in self.processed_data.columns:
-                #         agg_dict['总成本'] = 'sum'
-
-                #     if '利润' in self.processed_data.columns:
-                #         agg_dict['利润'] = 'sum'
-
-                #     if '毛利率' in self.processed_data.columns:
-                #         agg_dict['毛利率'] = 'mean'
-
-                #     if agg_dict:
-                #         shop_summary = self.processed_data.groupby(shop_col).agg(agg_dict).round(2)
-                #         shop_summary.to_excel(writer, sheet_name='店铺汇总')
-
 
             print(f"数据已导出到: {output_path}")
             return True

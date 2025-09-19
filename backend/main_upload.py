@@ -13,19 +13,26 @@ import tempfile
 from upload_processor import UploadProcessor
 
 app = FastAPI(
-    title="京东店铺数据管理API",
+    title="JD Shop Data Management API",
     description="支持文件上传的京东店铺数据处理与分析API",
     version="2.0.0"
 )
 
-# CORS中间件
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS中间件 - 注释掉，由nginx处理
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=[
+#         "http://shop.lchnan.cn",
+#         "https://shop.lchnan.cn",
+#         "http://apis.lchnan.cn",
+#         "https://apis.lchnan.cn",
+#         "http://localhost:3000",
+#         "http://127.0.0.1:3000"
+#     ],
+#     allow_credentials=True,
+#     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+#     allow_headers=["*"],
+# )
 
 # 创建上传目录
 UPLOAD_DIR = "uploads"
@@ -44,7 +51,12 @@ current_processor = None
 
 @app.get("/")
 async def root():
-    return {"message": "京东店铺数据管理API（文件上传版）", "version": "2.0.0"}
+    return {"message": "JD Shop Data Management API (File Upload Version)", "version": "2.0.0"}
+
+@app.options("/upload/files")
+async def options_upload_files():
+    """处理上传文件的OPTIONS预检请求"""
+    return {"message": "OK"}
 
 @app.post("/upload/files")
 async def upload_files(
@@ -265,4 +277,4 @@ async def clear_uploaded_files():
 if __name__ == "__main__":
     import uvicorn
     import pandas as pd  # 添加pandas导入
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=6532)

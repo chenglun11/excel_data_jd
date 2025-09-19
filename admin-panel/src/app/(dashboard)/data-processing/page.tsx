@@ -20,7 +20,6 @@ import {
   Play,
   Download,
   Search,
-  Filter,
   TrendingUp,
   Package,
   Store,
@@ -38,14 +37,14 @@ interface ProcessingResult {
   success: boolean
   message: string
   data: {
-    records: any[]
+    records: Record<string, unknown>[]
     total_records: number
     columns: string[]
   }
   analysis: {
-    summary: any
-    shop_analysis: any
-    processing_info: any
+    summary: Record<string, unknown>
+    shop_analysis: Record<string, unknown>
+    processing_info: Record<string, unknown>
   }
 }
 
@@ -54,7 +53,7 @@ export default function DataProcessingPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<ProcessingResult | null>(null)
-  const [showFilters, setShowFilters] = useState(false)
+  // const [showFilters, setShowFilters] = useState(false)
 
   // 加载店铺列表
   useEffect(() => {
@@ -262,7 +261,7 @@ export default function DataProcessingPage() {
             {!result ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>请选择店铺并点击"开始处理"</p>
+                <p>请选择店铺并点击&quot;开始处理&quot;</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -284,25 +283,25 @@ export default function DataProcessingPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="text-center p-4 border rounded-lg">
                         <div className="text-2xl font-bold text-blue-600">
-                          {result.analysis.summary.total_records || 0}
+                          {(result.analysis.summary.total_records as number) || 0}
                         </div>
                         <div className="text-sm text-muted-foreground">订单数</div>
                       </div>
                       <div className="text-center p-4 border rounded-lg">
                         <div className="text-2xl font-bold text-green-600">
-                          ¥{(result.analysis.summary.total_revenue || 0).toLocaleString()}
+                          ¥{((result.analysis.summary.total_revenue as number) || 0).toLocaleString()}
                         </div>
                         <div className="text-sm text-muted-foreground">总收入</div>
                       </div>
                       <div className="text-center p-4 border rounded-lg">
                         <div className="text-2xl font-bold text-orange-600">
-                          ¥{(result.analysis.summary.total_cost || 0).toLocaleString()}
+                          ¥{((result.analysis.summary.total_cost as number) || 0).toLocaleString()}
                         </div>
                         <div className="text-sm text-muted-foreground">总成本</div>
                       </div>
                       <div className="text-center p-4 border rounded-lg">
                         <div className="text-2xl font-bold text-purple-600">
-                          {((result.analysis.summary.avg_profit_margin || 0) * 100).toFixed(1)}%
+                          {(((result.analysis.summary.avg_profit_margin as number) || 0) * 100).toFixed(1)}%
                         </div>
                         <div className="text-sm text-muted-foreground">平均毛利率</div>
                       </div>
@@ -333,17 +332,17 @@ export default function DataProcessingPage() {
                               {result.data.records.slice(0, 10).map((record, index) => (
                                 <TableRow key={index}>
                                   <TableCell className="max-w-[200px] truncate">
-                                    {record.店铺名称}
+                                    {String(record.店铺名称 || '')}
                                   </TableCell>
                                   <TableCell className="max-w-[150px] truncate">
-                                    {record.商品名称}
+                                    {String(record.商品名称 || '')}
                                   </TableCell>
-                                  <TableCell>{record.商品编码}</TableCell>
-                                  <TableCell>¥{(record.买家实付 || 0).toFixed(2)}</TableCell>
-                                  <TableCell>¥{(record.成本 || 0).toFixed(2)}</TableCell>
-                                  <TableCell>¥{(record.利润 || 0).toFixed(2)}</TableCell>
+                                  <TableCell>{String(record.商品编码 || '')}</TableCell>
+                                  <TableCell>¥{((record.买家实付 as number) || 0).toFixed(2)}</TableCell>
+                                  <TableCell>¥{((record.成本 as number) || 0).toFixed(2)}</TableCell>
+                                  <TableCell>¥{((record.利润 as number) || 0).toFixed(2)}</TableCell>
                                   <TableCell>
-                                    {((record.毛利率 || 0) * 100).toFixed(1)}%
+                                    {(((record.毛利率 as number) || 0) * 100).toFixed(1)}%
                                   </TableCell>
                                 </TableRow>
                               ))}

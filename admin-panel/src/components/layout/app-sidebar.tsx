@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, BarChart3, Package, ShoppingCart, Users, Settings } from "lucide-react"
+import { Package, Settings } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
