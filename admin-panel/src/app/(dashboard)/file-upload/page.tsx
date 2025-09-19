@@ -34,6 +34,10 @@ import {
   Store
 } from "lucide-react"
 import { apiRequest } from "@/lib/auth"
+import { filesApi } from "@/lib/api/files"
+// 移除了对认证的依赖，现在支持无登录使用
+import { useConfig } from "@/lib/config"
+import { uploadFlowDebug } from "@/lib/upload-flow-debug"
 
 interface UploadedFiles {
   product_file: string
@@ -85,6 +89,8 @@ export default function FileUploadPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [result, setResult] = useState<ProcessingResult | null>(null)
 
+  const { config } = useConfig()
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'product' | 'order') => {
     const file = e.target.files?.[0]
     if (file) {
@@ -104,32 +110,25 @@ export default function FileUploadPage() {
 
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('product_file', productFile)
-      formData.append('order_file', orderFile)
+      const data = await filesApi.uploadFiles(productFile, orderFile)
 
-      const response = await fetch('http://apis.lchnan.cn/upload/files', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      })
+      setUploadedFiles(data.files)
+      setFileAnalysis(data.analysis)
 
-      const data = await response.json()
+      // 加载店铺列表
+      await loadShops()
 
-      if (data.success) {
-        setUploadedFiles(data.files)
-        setFileAnalysis(data.analysis)
-
-        // 加载店铺列表
-        await loadShops()
-
-        alert("文件上传成功！")
-      } else {
-        alert("上传失败: " + data.detail)
+      // 调试：检查上传流程状态
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 文件上传成功，开始检查后续流程...')
+        console.log('📁 上传的文件:', data.files)
+        console.log('🏪 加载的店铺数量:', shops.length)
       }
+
+      alert("文件上传成功！")
     } catch (error) {
       console.error("上传错误:", error)
-      alert("上传失败")
+      alert(`上传失败: ${error instanceof Error ? error.message : '未知错误'}`)
     } finally {
       setUploading(false)
     }
@@ -137,6 +136,7 @@ export default function FileUploadPage() {
 
   const loadShops = async () => {
     try {
+      // 使用无认证的 API 请求
       const response = await apiRequest("/data/shops")
       const data = await response.json()
 
@@ -192,8 +192,8 @@ export default function FileUploadPage() {
         method: "POST",
         body: JSON.stringify({
           selected_shops: selectedShops.length > 0 ? selectedShops : null,
-          include_closed_orders: false,
-          include_offline_orders: false
+          include_closed_orders: config.processing.includeClosedOrders,
+          include_offline_orders: config.processing.includeOfflineOrders
         })
       })
 
@@ -215,17 +215,20 @@ export default function FileUploadPage() {
         method: "POST",
         body: JSON.stringify({
           selected_shops: selectedShops.length > 0 ? selectedShops : null,
-          include_closed_orders: false,
-          include_offline_orders: false
+          include_closed_orders: config.processing.includeClosedOrders,
+          include_offline_orders: config.processing.includeOfflineOrders
         })
       })
 
       const data = await response.json()
+
       if (data.success) {
         // 触发下载
-        const downloadUrl = `http://apis.lchnan.cn${data.download_url}`
+        const downloadUrl = `${config.api.baseUrl}${data.download_url}`
         window.open(downloadUrl, '_blank')
         alert(`数据导出成功！文件名: ${data.filename}`)
+      } else {
+        alert("导出失败: " + data.message)
       }
     } catch (error) {
       console.error("导出失败:", error)
@@ -235,20 +238,15 @@ export default function FileUploadPage() {
 
   const clearFiles = async () => {
     try {
-      const response = await fetch('http://apis.lchnan.cn/files/clear', {
-        method: 'DELETE',
-        credentials: 'include'
-      })
+      await filesApi.clearFiles()
 
-      if (response.ok) {
-        setUploadedFiles(null)
-        setFileAnalysis(null)
-        setShops([])
-        setResult(null)
-        setProductFile(null)
-        setOrderFile(null)
-        alert("文件清理完成")
-      }
+      setUploadedFiles(null)
+      setFileAnalysis(null)
+      setShops([])
+      setResult(null)
+      setProductFile(null)
+      setOrderFile(null)
+      alert("文件清理完成")
     } catch (error) {
       console.error("清理失败:", error)
       alert("清理失败")
@@ -346,12 +344,67 @@ export default function FileUploadPage() {
                   <Trash2 className="h-4 w-4 mr-2" />
                   清理文件
                 </Button>
+                {process.env.NODE_ENV === 'development' && (
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      console.clear()
+                      console.group('🔍 当前状态调试')
+                      console.log('📁 已上传文件:', uploadedFiles)
+                      console.log('🏪 店铺列表:', shops)
+                      console.log('🏪 店铺数量:', shops.length)
+                      console.log('✅ 已选择店铺:', getSelectedShops())
+
+                      // 测试基本 API 连接
+                      try {
+                        const testResponse = await apiRequest("/data/shops")
+                        const testData = await testResponse.json()
+                        console.log('✅ 店铺 API 测试成功:', testData)
+                      } catch (error) {
+                        console.error('❌ 店铺 API 测试失败:', error)
+                      }
+
+                      console.groupEnd()
+                      alert('调试信息已输出到控制台，请按 F12 查看')
+                    }}
+                  >
+                    🔍 调试状态
+                  </Button>
+                )}
               </>
             )}
           </div>
         </CardContent>
       </Card>
 
+
+      {/* 状态显示 */}
+      {uploadedFiles && (
+        <Card>
+          <CardHeader>
+            <CardTitle>处理状态</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm">文件上传完成</span>
+              </div>
+              {shops.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span className="text-sm">发现 {shops.length} 个店铺</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-yellow-500" />
+                  <span className="text-sm">店铺列表加载中或为空...</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 处理控制和结果展示 */}
       {uploadedFiles && shops.length > 0 && (

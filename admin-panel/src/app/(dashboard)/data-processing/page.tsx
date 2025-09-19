@@ -27,6 +27,8 @@ import {
   CheckCircle
 } from "lucide-react"
 import { apiRequest } from "@/lib/auth"
+// 移除了对认证的依赖，现在支持无登录使用
+import { useConfig } from "@/lib/config"
 
 interface Shop {
   name: string
@@ -53,7 +55,8 @@ export default function DataProcessingPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<ProcessingResult | null>(null)
-  // const [showFilters, setShowFilters] = useState(false)
+
+  const { config } = useConfig()
 
   // 加载店铺列表
   useEffect(() => {
@@ -112,8 +115,8 @@ export default function DataProcessingPage() {
         method: "POST",
         body: JSON.stringify({
           selected_shops: selectedShops.length > 0 ? selectedShops : null,
-          include_closed_orders: false,
-          include_offline_orders: false
+          include_closed_orders: config.processing.includeClosedOrders,
+          include_offline_orders: config.processing.includeOfflineOrders
         })
       })
 
@@ -134,17 +137,21 @@ export default function DataProcessingPage() {
         method: "POST",
         body: JSON.stringify({
           selected_shops: selectedShops.length > 0 ? selectedShops : null,
-          include_closed_orders: false,
-          include_offline_orders: false
+          include_closed_orders: config.processing.includeClosedOrders,
+          include_offline_orders: config.processing.includeOfflineOrders
         })
       })
 
       const data = await response.json()
+
       if (data.success) {
         alert(`数据导出成功！文件名: ${data.filename}`)
+      } else {
+        alert("导出失败: " + data.message)
       }
     } catch (error) {
       console.error("导出失败:", error)
+      alert("导出失败")
     }
   }
 

@@ -19,20 +19,20 @@ app = FastAPI(
 )
 
 # CORS中间件 - 注释掉，由nginx处理
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=[
-#         "http://shop.lchnan.cn",
-#         "https://shop.lchnan.cn",
-#         "http://apis.lchnan.cn",
-#         "https://apis.lchnan.cn",
-#         "http://localhost:3000",
-#         "http://127.0.0.1:3000"
-#     ],
-#     allow_credentials=True,
-#     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-#     allow_headers=["*"],
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://shop.lchnan.cn",
+        "https://shop.lchnan.cn",
+        "http://apis.lchnan.cn",
+        "https://apis.lchnan.cn",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # 创建上传目录
 UPLOAD_DIR = "uploads"
